@@ -1,11 +1,14 @@
 import SwiftUI
 
-/// Scrolling danmaku overlay.
+/// Scrolling danmaku overlay (UI only).
 ///
 /// Lanes are assigned greedily: a comment takes the first lane whose previous
 /// entry has fully cleared, so comments never overlap. Positions are derived
 /// from the playback clock (not a timer), which keeps them in sync after seeks
 /// and rate changes.
+///
+/// This view does **not** perform networking. Pass in comments the host app
+/// already obtained through its own, separately authorized channels.
 public struct DanmakuOverlay: View {
     private let comments: [DanmakuComment]
     private let time: Double
@@ -15,7 +18,7 @@ public struct DanmakuOverlay: View {
     private let areaRatio: Double
 
     /// - Parameters:
-    ///   - comments: sorted by `time` ascending (`DanmakuService` returns them sorted).
+    ///   - comments: preferably sorted by `time` ascending.
     ///   - time: current playback position in seconds.
     ///   - duration: seconds a scrolling comment takes to cross the screen.
     ///   - areaRatio: fraction of the height used by danmaku, from the top.
@@ -80,7 +83,6 @@ public struct DanmakuOverlay: View {
 
     /// Comments currently on screen, each assigned a free lane.
     private func layout(laneCount: Int) -> [Placed] {
-        // Only consider a small window around `time`; comments are sorted.
         let start = time - duration
         guard !comments.isEmpty else { return [] }
 
@@ -106,17 +108,15 @@ public struct DanmakuOverlay: View {
             let progress = (time - c.time) / duration
             guard progress >= 0, progress <= 1 else { continue }
 
-            // pick first lane free at this comment's start time
             var lane = -1
             for l in 0..<laneCount where laneFreeAt[l] <= c.time {
                 lane = l
                 break
             }
             if lane < 0 { continue }     // screen saturated: drop
-            // lane is busy until the comment has travelled ~40% of the way
             laneFreeAt[lane] = c.time + duration * 0.4
             out.append(Placed(id: c.id, c: c, lane: lane, progress: progress))
-            if out.count > 120 { break } // hard cap for performance
+            if out.count > 120 { break }
         }
         return out
     }

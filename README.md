@@ -1,53 +1,47 @@
 # LumenDanmaku
 
-弹幕客户端模块（Swift / SwiftUI）。
+**SwiftUI 弹幕轨道渲染组件（仅 UI）**
 
-## 定位
+本仓库**只负责把已有弹幕画到屏幕上**，不负责从任何在线弹幕网络拉取、签名、缓存、转发或二次分发数据。
 
-一个**通用弹幕客户端库**，不绑定任何特定服务商：
+---
 
-- **不内置任何 API 凭证**，也不含任何服务商的默认地址
-- 服务器地址与凭证由调用方传入（通常来自最终用户的设置界面）
-- 未配置时不发起任何网络请求
-- 本库不提供、不托管、不代理弹幕数据
+## 本仓库包含 / 不包含
 
-## 免责声明
+| 包含 | **不包含** |
+|------|------------|
+| `DanmakuComment` 数据模型 | 任何默认服务器地址 |
+| `DanmakuOverlay` 滚动/顶底布局 | AppId / AppSecret / 签名逻辑 |
+| 轨道分配、seek 对齐、字号与透明度 | 网络客户端、代理、镜像、批量导出 |
 
-本库仅实现客户端协议，**不提供任何弹幕数据**。
+> **不是**弹弹play开放弹幕网络（或其它弹幕服务）的官方/非官方 SDK。  
+> **不是**可供任意应用复用的「在线弹幕接入模块」或转发网关。
 
-使用者需自行向所选服务商申请接入凭证，并自行遵守该服务商的服务条款、
-接入协议与配额限制。因使用本库访问第三方服务而产生的任何责任，
-由使用者自行承担。
+---
 
-## 功能
+## 设计意图
 
-- 签名鉴权：`Base64(SHA256(AppId + Timestamp + Path + AppSecret))`
-- 按标题 + 集数匹配剧集并拉取弹幕
-- SwiftUI 渲染层：
-  - 贪心轨道分配，弹幕互不重叠，屏幕饱和时丢弃
-  - 时间窗口二分查找，只渲染屏幕内条目（上限 120 条）
-  - 位置由播放时钟推导而非定时器，seek / 变速后自动对齐
+播放器若需要在线弹幕，应由**该应用自身**：
+
+1. 向相应开放平台以**应用身份**完成审核与接入；  
+2. 自行保管凭证（**推荐服务端中转**，切勿把 Secret 写入公开代码）；  
+3. 将已获得的弹幕列表映射为 `[DanmakuComment]` 后交给本组件渲染。
+
+本包刻意不实现网络层，以避免被误用为镜像、二次分发或未授权接入的基础设施。
+
+---
 
 ## 使用
 
 ```swift
 import LumenDanmaku
 
-// 1. 配置：值来自最终用户的设置界面，不要硬编码
-DanmakuService.configure(
-    server: userServerURL,      // 任意兼容 dandanplay 风格 API 的服务
-    appId: userAppId,
-    appSecret: userAppSecret
-)
+// comments 由宿主应用自行准备（本地文件 / 自建后端 / 该应用已授权的接口等）
+let comments: [DanmakuComment] = /* ... */
 
-// 2. 加载
-guard DanmakuService.isConfigured else { return }
-let comments = try await DanmakuService.load(title: "剧名", episode: 3)
-
-// 3. 渲染（叠在播放器画面之上）
 DanmakuOverlay(
     comments: comments,
-    time: playbackSeconds,      // 当前播放位置
+    time: playbackSeconds,   // 当前播放位置（建议 ≥30Hz 刷新或插值）
     opacity: 0.85,
     fontSize: 16
 )
@@ -55,19 +49,36 @@ DanmakuOverlay(
 
 ### 关于播放时钟
 
-`time` 建议以不低于 30Hz 的频率更新。多数播放器的进度回调只有 2~4Hz，
-直接传入会让弹幕肉眼可见地跳动；实践中可用进度回调作为锚点，
-再按墙钟插值到屏幕刷新率。
+`time` 建议以不低于约 30Hz 更新。多数播放器进度回调只有 2–4Hz，直接传入会肉眼跳动；可用进度回调作锚点，再按墙钟插值到屏幕刷新率。
+
+---
 
 ## 安装
 
 Swift Package Manager：
 
 ```swift
-.package(url: "https://github.com/ywddd/LumenDanmaku", from: "0.1.0")
+.package(url: "https://github.com/ywddd/LumenDanmaku", from: "0.2.0")
 ```
 
 要求 iOS 16+。
+
+---
+
+## 与 Lumen 播放器的关系
+
+[Lumen](https://github.com/ywddd/CineLink)（流明）是独立的个人媒体库播放器应用。  
+若 Lumen 使用在线弹幕，其网络与鉴权逻辑位于**该应用私有工程**内，**不在**本开源渲染包中。
+
+---
+
+## 变更说明（相对 0.1）
+
+- **移除** `DanmakuService`（网络、签名、dandanplay 风格协议客户端）  
+- **仅保留** 渲染与 `DanmakuComment` 模型  
+- 文档明确：禁止将本仓库表述为通用在线弹幕 SDK / 转发模块  
+
+---
 
 ## 许可
 
